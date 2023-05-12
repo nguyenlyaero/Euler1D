@@ -44,9 +44,17 @@ void GenericSolver::Initialize(const toml::table& params) {
     throw -1;
   }
 
-  const auto& stringList = *params["Solve"]["Output"].as_array();
-  for (const auto& element : stringList) {
-    this->output_vars.push_back(*element.value<std::string>());
+  {
+    const auto& stringList = *params["Solve"]["Output"].as_array();
+    for (const auto& element : stringList) {
+      this->output_vars.push_back(*element.value<std::string>());
+    }
+  }
+  {
+    const auto& stringList = *params["Solve"]["Output_FA"].as_array();
+    for (const auto& element : stringList) {
+      this->output_vars_fa.push_back(*element.value<std::string>());
+    }
   }
   this->write_interval = *params["Solve"]["write_interval"].value<int>();
 
@@ -69,6 +77,9 @@ void GenericSolver::Initialize(const toml::table& params) {
   this->SoS = this->grid.RegisterVariable("SOS", CV_DATA);
   this->CFL = this->grid.RegisterVariable("CFL", CV_DATA);
 
+  this->beta_R = this->grid.RegisterVariable("beta_R", CV_DATA);
+  this->beta_RY = this->grid.RegisterVariable("beta_RY", CV_DATA);
+
   this->conservatives = new double*[this->num_conservatives];
   this->conservatives[0] = this->R;
   this->conservatives[1] = this->RU;
@@ -83,6 +94,19 @@ void GenericSolver::Initialize(const toml::table& params) {
     this->rhs_array[rk_step][2] = this->grid.RegisterVariable("RHS_RHOE_"+std::to_string(rk_step), CV_DATA);
     this->rhs_array[rk_step][3] = this->grid.RegisterVariable("RHS_RHOY_"+std::to_string(rk_step), CV_DATA);
   }
+
+  this->FR = this->grid.RegisterVariable("FR", FA_DATA);
+  this->FRU = this->grid.RegisterVariable("FRU", FA_DATA);
+  this->FRE = this->grid.RegisterVariable("FRE", FA_DATA);
+  this->FRY = this->grid.RegisterVariable("FRY", FA_DATA);
+
+  this->FA_MARK = this->grid.RegisterVariable("FA_MARK", FA_DATA);
+
+  this->FR_CV = this->grid.RegisterVariable("FR_CV", CV_DATA);
+  this->FRU_CV = this->grid.RegisterVariable("FRU_CV", CV_DATA);
+  this->FRE_CV = this->grid.RegisterVariable("FRE_CV", CV_DATA);
+  this->FRY_CV = this->grid.RegisterVariable("FRY_CV", CV_DATA);
+
 
   this->PrintSelf();
 
@@ -134,6 +158,7 @@ void GenericSolver::InitializeCase(const toml::table& params) {
     throw -1;
   }
   this->UpdatePrimitives(0);
+  this->UpdateFluxes(0);
 }
 
 void GenericSolver::PrintSelf() {
@@ -223,37 +248,11 @@ void GenericSolver::CalcRKRhs(int rk_step, double rk_time) {
 
   // Loop over internal faces
   for (int ifa = 0; ifa < this->nfa; ++ifa) {
+
     int icv0 = this->cvofa[ifa].first;
     int icv1 = this->cvofa[ifa].second;
 
-    double rho0 = this->R[icv0];
-    double rho1 = this->R[icv1];
-
-    double rhou0 = this->RU[icv0];
-    double rhou1 = this->RU[icv1];
-
-    double rhoE0 = this->RE[icv0];
-    double rhoE1 = this->RE[icv1];
-
-    double rhoY0 = this->RY[icv0];
-    double rhoY1 = this->RY[icv1];
-
-    double P0 = this->P[icv0];
-    double P1 = this->P[icv1];
-
-    double T0 = this->T[icv0];
-    double T1 = this->T[icv1];
-
-    double Frho = 0., Frhou = 0., FrhoE = 0., FrhoY = 0.;
-
-    this->mixture->CalcNumericalFlux(rho0, rho1,
-                                     rhou0, rhou1,
-                                     rhoE0, rhoE1,
-                                     rhoY0, rhoY1,
-                                     P0, P1,
-                                     T0, T1,
-                                     Frho, Frhou,
-                                     FrhoE, FrhoY);
+    double Frho = FR[ifa], Frhou = FRU[ifa], FrhoE = FRE[ifa], FrhoY = FRY[ifa];
 
     rho_rhs[icv0] -= Frho;
     rhou_rhs[icv0] -= Frhou;
@@ -278,6 +277,8 @@ void GenericSolver::SolveRKSubStep(int rk_step) {
   // Update primitives
   this->UpdatePrimitives(rk_step);
 
+  // Update fluxes
+  this->UpdateFluxes(rk_step);
 }
 
 void GenericSolver::UpdateConservatives(int rk_step) {
@@ -301,6 +302,63 @@ void GenericSolver::UpdatePrimitives(int rk_step) {
     this->P[icv] = mixture->GetP();
     this->T[icv] = mixture->GetT();
     this->SoS[icv] = mixture->GetSoS();
+    this->beta_R[icv] = mixture->GetBeta_R();
+    this->beta_RY[icv] = mixture->GetBeta_RY();
+  }
+}
+
+void GenericSolver::UpdateFluxes(int rk_step) {
+  // Loop over internal faces
+  for (int ifa = 0; ifa < this->nfa; ++ifa) {
+    int icv0 = this->cvofa[ifa].first;
+    int icv1 = this->cvofa[ifa].second;
+
+    double rho0 = this->R[icv0];
+    double rho1 = this->R[icv1];
+
+    double rhou0 = this->RU[icv0];
+    double rhou1 = this->RU[icv1];
+
+    double rhoE0 = this->RE[icv0];
+    double rhoE1 = this->RE[icv1];
+
+    double rhoY0 = this->RY[icv0];
+    double rhoY1 = this->RY[icv1];
+
+    double P0 = this->P[icv0];
+    double P1 = this->P[icv1];
+
+    double T0 = this->T[icv0];
+    double T1 = this->T[icv1];
+
+    double BR0 = this->beta_R[icv0];
+    double BR1 = this->beta_R[icv1];
+    double BRY0 = this->beta_RY[icv0];
+    double BRY1 = this->beta_RY[icv1];
+
+    double Frho = 0., Frhou = 0., FrhoE = 0., FrhoY = 0.;
+
+    this->mixture->CalcNumericalFlux(rho0, rho1,
+                                     rhou0, rhou1,
+                                     rhoE0, rhoE1,
+                                     rhoY0, rhoY1,
+                                     P0, P1,
+                                     T0, T1,
+                                     Frho, Frhou,
+                                     FrhoE, FrhoY,
+                                     BR0, BR1,
+                                     BRY0, BRY1, FA_MARK[ifa]);
+    this->FR[ifa] = Frho;
+    this->FRU[ifa] = Frhou;
+    this->FRE[ifa] = FrhoE;
+    this->FRY[ifa] = FrhoY;
+
+    for (int icv : {icv0,icv1}) {
+      FR_CV[icv] = RU[icv];
+      FRU_CV[icv] = RU[icv]*RU[icv]/R[icv] + P[icv];
+      FRE_CV[icv] = RE[icv]*RU[icv]/R[icv] + P[icv]*RU[icv]/R[icv];
+      FRY_CV[icv] = RY[icv]*RU[icv]/R[icv];
+    }
   }
 }
 
@@ -347,22 +405,43 @@ void GenericSolver::Output() {
   GenericSolver::DumpScalarRange(this->SoS, this->ncv, "SoS");
 
   // Write output
-  if (this->step % this->write_interval == 0) {
-    std::ofstream fs;
-    fs.open("Line."+std::to_string(this->step));
-    // Preamble
-    fs << "t";
-    for (auto str : this->output_vars) fs << "," << str;
-    fs << std::endl;
-
-    for (int icv = 0; icv < this->ncv; ++icv) {
-      fs << std::setprecision(9) << this->time;
-      for(auto str : this->output_vars)
-        fs << "," << this->grid.GetCVVar(str)[icv] ;
+  {
+    if (this->step % this->write_interval == 0) {
+      std::ofstream fs;
+      fs.open("Line."+std::to_string(this->step));
+      // Preamble
+      fs << "t";
+      for (auto str : this->output_vars) fs << "," << str;
       fs << std::endl;
-    }
 
-    fs.close();
+      for (int icv = 0; icv < this->ncv; ++icv) {
+        fs << std::setprecision(9) << this->time;
+        for(auto str : this->output_vars)
+          fs << "," << this->grid.GetCVVar(str)[icv] ;
+        fs << std::endl;
+      }
+
+      fs.close();
+    }
+  }
+  {
+    if (this->step % this->write_interval == 0) {
+      std::ofstream fs;
+      fs.open("LineFA."+std::to_string(this->step));
+      // Preamble
+      fs << "t";
+      for (auto str : this->output_vars_fa) fs << "," << str;
+      fs << std::endl;
+
+      for (int ifa = 0; ifa < this->nfa; ++ifa) {
+        fs << std::setprecision(9) << this->time;
+        for(auto str : this->output_vars_fa)
+          fs << "," << this->grid.GetFAVar(str)[ifa] ;
+        fs << std::endl;
+      }
+
+      fs.close();
+    }
   }
 }
 

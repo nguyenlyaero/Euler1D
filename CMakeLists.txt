@@ -8,6 +8,7 @@ project(1DEuler)
 include_directories(
   /home/nguyenly/local/1DEuler/1DEuler
   /home/nguyenly/local/eigen/3.2.9/eigen
+  /usr/local/include
 )
 
 link_directories(
@@ -26,6 +27,12 @@ Solvers/Interface.h
 EOS/pengrobinsoneos.cpp EOS/pengrobinsoneos.h
 )
 
-#target_link_libraries(
-#1DEuler
-#)
+target_link_libraries(
+1DEuler
+pugixml
+)
+
+target_compile_definitions(
+1DEuler PUBLIC
+NASAPOLYPATH="${CMAKE_SOURCE_DIR}/NASAPOLY/nasa_poly.xml"
+)

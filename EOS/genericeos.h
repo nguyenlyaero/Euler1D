@@ -19,7 +19,7 @@ public:
   virtual void SetMixture_TRY(double T, double R, double Y) {
     throw "Not implemented";
   }
-  virtual void SetMixture_ERY(double T, double R, double Y) {
+  virtual void SetMixture_ERY(double T, double R, double Y, double Tguess=0.) {
     throw "Not implemented";
   }
   virtual void SetMixture_PRY(double P, double R, double Y) {
@@ -33,7 +33,10 @@ public:
                                  double P0, double P1,
                                  double T0, double T1,
                                  double& Frho, double& Frhou,
-                                 double& FrhoE, double& FrhoY) {
+                                 double& FrhoE, double& FrhoY,
+                                 double BR0, double BR1,
+                                 double BRY0, double BRY1,
+                                 double& FA_MARK) {
     throw "Not implemented";
   }
 
@@ -45,6 +48,8 @@ public:
   virtual double GetE() { return this->E; }
   virtual double GetY() { return this->Y; }
   virtual double GetSoS() { return this->SoS; }
+  virtual double GetBeta_R() { return this->beta_R; }
+  virtual double GetBeta_RY() { return this->beta_RY; }
 
   // TODO: other needed variables
 
@@ -52,6 +57,8 @@ protected:
   double E, R, Y;
   double P, T;
   double SoS;
+
+  double beta_R, beta_RY;
 };
 
 #endif // GENERICEOS_H

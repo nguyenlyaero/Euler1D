@@ -35,6 +35,7 @@ protected:
 
   void UpdateConservatives(int rk_step);
   void UpdatePrimitives(int rk_step);
+  void UpdateFluxes(int rk_step);
 
   void Output();
   static void DumpScalarRange(double* scalar, int n, std::string name);
@@ -65,6 +66,22 @@ protected:
   double* SoS;
   double* CFL;
 
+  double* beta_R;
+  double* beta_RY;
+
+  // Fluxes
+  double* FR;
+  double* FRU;
+  double* FRE;
+  double* FRY;
+
+  double* FA_MARK;
+
+  double* FR_CV;
+  double* FRU_CV;
+  double* FRE_CV;
+  double* FRY_CV;
+
   // Arrays
   double** conservatives;
   double*** rhs_array;
@@ -85,6 +102,7 @@ protected:
 
   int write_interval;
   std::vector<std::string> output_vars;
+  std::vector<std::string> output_vars_fa;
 };
 
 #endif // GENERICSOLVER_H
