@@ -1,13 +1,14 @@
-#ifndef IDEALGASEOS_H
-#define IDEALGASEOS_H
+#ifndef VANDERWAALSEOS_H
+#define VANDERWAALSEOS_H
 
 #include "genericeos.h"
 
-class IdealGasEOS : public GenericEOS {
-public:
-  enum NumFlux {CENTRAL, PEQ_CENTRAL, UPWIND_LEFT, PEQ_UPWIND_LEFT};
-  IdealGasEOS() = default;
-  ~IdealGasEOS() override = default;
+
+class VanDerWaalsEOS : public GenericEOS {
+ public:
+  enum NumFlux { CENTRAL, PEQ_CENTRAL };
+  VanDerWaalsEOS() = default;
+  ~VanDerWaalsEOS() override = default;
 
   virtual void Initialize(const toml::table& params) override;
 
@@ -33,18 +34,22 @@ public:
 
   virtual void PrintSelf() override;
 
-private:
-  virtual void CalcMixingRule();
-  virtual void CalcBetas();
+ private:
+  void TestEOS(const toml::table& params);
 
-  NumFlux numerical_flux;
+  void RealFluidFromTR();
+  void RZFromTP();
 
-  double gamma0, gamma1, G0, G1;
-  double M0, M1;
   constexpr static const double R0 = 8314; // J/kmol/K
 
-  double M_bar, R_bar;
-  double gamma_bar;
+  double M, gamma0;
+  double Pc, Tc;
+  double A, B;
+
+  double dPdT_v, dPdv_T;
+  double gamma;
+
+  NumFlux numerical_flux;
 };
 
-#endif // IDEALGASEOS_H
+#endif // VANDERWAALSEOS_H

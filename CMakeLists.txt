@@ -25,6 +25,8 @@ Solvers/genericsolver.cpp Solvers/genericsolver.h
 #toml++/toml.hpp
 Solvers/Interface.h
 EOS/pengrobinsoneos.cpp EOS/pengrobinsoneos.h
+EOS/vanderwaalseos.cpp EOS/vanderwaalseos.h
+EOS/utils.h
 )
 
 target_link_libraries(

@@ -95,10 +95,15 @@ void GenericSolver::Initialize(const toml::table& params) {
     this->rhs_array[rk_step][3] = this->grid.RegisterVariable("RHS_RHOY_"+std::to_string(rk_step), CV_DATA);
   }
 
-  this->FR = this->grid.RegisterVariable("FR", FA_DATA);
-  this->FRU = this->grid.RegisterVariable("FRU", FA_DATA);
-  this->FRE = this->grid.RegisterVariable("FRE", FA_DATA);
-  this->FRY = this->grid.RegisterVariable("FRY", FA_DATA);
+  this->FR0 = this->grid.RegisterVariable("FR0", FA_DATA);
+  this->FRU0 = this->grid.RegisterVariable("FRU0", FA_DATA);
+  this->FRE0 = this->grid.RegisterVariable("FRE0", FA_DATA);
+  this->FRY0 = this->grid.RegisterVariable("FRY0", FA_DATA);
+
+  this->FR1 = this->grid.RegisterVariable("FR1", FA_DATA);
+  this->FRU1 = this->grid.RegisterVariable("FRU1", FA_DATA);
+  this->FRE1 = this->grid.RegisterVariable("FRE1", FA_DATA);
+  this->FRY1 = this->grid.RegisterVariable("FRY1", FA_DATA);
 
   this->FA_MARK = this->grid.RegisterVariable("FA_MARK", FA_DATA);
 
@@ -134,12 +139,6 @@ void GenericSolver::InitializeCase(const toml::table& params) {
     std::cout << "u0: " << u0 << ", P0: " << P0 << std::endl;
     std::cout << "xc: " << xc << ", rc: " << rc << ", k: " << k << std::endl;
     std::cout << "wY0: " << wY0 << ", wY1: " << wY1 << std::endl;
-    std::cout << "Output: ";
-    for (auto str : this->output_vars) {
-      std::cout << str << " ";
-    }
-    std::cout << std::endl;
-    std::cout << "write_interval: " << this->write_interval << std::endl;
 
     for (int icv = 0; icv < this->ncv; ++icv) {
       double r = std::fabs(this->xcv[icv] - xc);
@@ -152,6 +151,58 @@ void GenericSolver::InitializeCase(const toml::table& params) {
       this->mixture->SetMixture_PRY(P0, this->R[icv], this->RY[icv]/this->R[icv]);
       this->RE[icv] = this->R[icv]*this->mixture->GetE()
           + 0.5*this->R[icv]*u0*u0;
+    }
+  } else if (init == "TEST_TP_Linear") {
+    double T0 = *params["IC"]["T0"].value<double>();
+    double T1 = *params["IC"]["T1"].value<double>();
+    assert(T0 < T1);
+    double x0 = *params["IC"]["x0"].value<double>();
+    double x1 = *params["IC"]["x1"].value<double>();
+    assert(x0 < x1);
+    double P0 = *params["IC"]["P0"].value<double>();
+
+    std::cout << "------------------------------------" << std::endl;
+    std::cout << "Initialize Case: " << std::endl;
+    std::cout << "------------------------------------" << std::endl;
+    std::cout << "u0: " << 0 << ", P: " << P0 << std::endl;
+    std::cout << "T0: " << T0 << ", T1: " << T1 << std::endl;
+    std::cout << "x0: " << x0 << ", x1: " << x1 << std::endl;
+
+    for (int icv = 0; icv < this->ncv; ++icv) {
+      double Tin = std::min(std::max(T0, T0 + (T1 - T0) / (x1 - x0) * (xcv[icv] - x0)), T1);
+
+      this->mixture->SetMixture_TPY(Tin, P0, 0.);
+
+      this->R[icv] = this->mixture->GetR();
+      this->RY[icv] = 0.;
+      this->RU[icv] = 0.;
+      this->RE[icv] = this->R[icv]*this->mixture->GetE();
+    }
+  } else if (init == "TP_Ramp") {
+    double T0 = *params["IC"]["T0"].value<double>();
+    double T1 = *params["IC"]["T1"].value<double>();
+    double P0 = *params["IC"]["P0"].value<double>();
+    double u0 = *params["IC"]["u0"].value<double>();
+    double xc = *params["IC"]["xc"].value<double>();
+    double rc = *params["IC"]["rc"].value<double>();
+    double k = *params["IC"]["k"].value<double>();
+
+    std::cout << "------------------------------------" << std::endl;
+    std::cout << "Initialize Case: " << std::endl;
+    std::cout << "------------------------------------" << std::endl;
+    std::cout << "u0: " << u0 << ", P: " << P0 << std::endl;
+    std::cout << "T0: " << T0 << ", T1: " << T1 << std::endl;
+    std::cout << "xc: " << xc << ", r1: " << rc << ", k: " << k <<  std::endl;
+
+    for (int icv = 0; icv < this->ncv; ++icv) {
+      double r = std::fabs(this->xcv[icv] - xc);
+      double Tin = T0 + 0.5 * (T1 - T0) * (1. + std::tanh(k*(r - rc)));
+      this->mixture->SetMixture_TPY(Tin, P0, 0.);
+
+      this->R[icv] = this->mixture->GetR();
+      this->RY[icv] = 0.;
+      this->RU[icv] = this->R[icv] * u0;
+      this->RE[icv] = this->R[icv]*this->mixture->GetE() + 0.5*this->R[icv]*u0*u0;;
     }
   } else {
     std::cout << "Unsupported Initialize Case: " << init << std::endl;
@@ -183,6 +234,13 @@ void GenericSolver::PrintSelf() {
     msg << "Stopping: " << "NSTEPS" << std::endl;
     msg << "num_steps: " << this->total_steps << std::endl;
   }
+
+  std::cout << "Output: ";
+  for (auto str : this->output_vars) {
+    std::cout << str << " ";
+  }
+  std::cout << std::endl;
+  std::cout << "write_interval: " << this->write_interval << std::endl;
 
   std::cout << msg.str();
 }
@@ -252,17 +310,15 @@ void GenericSolver::CalcRKRhs(int rk_step, double rk_time) {
     int icv0 = this->cvofa[ifa].first;
     int icv1 = this->cvofa[ifa].second;
 
-    double Frho = FR[ifa], Frhou = FRU[ifa], FrhoE = FRE[ifa], FrhoY = FRY[ifa];
+    rho_rhs[icv0] -= FR0[ifa];
+    rhou_rhs[icv0] -= FRU0[ifa];
+    rhoE_rhs[icv0] -= FRE0[ifa];
+    rhoY_rhs[icv0] -= FRY0[ifa];
 
-    rho_rhs[icv0] -= Frho;
-    rhou_rhs[icv0] -= Frhou;
-    rhoE_rhs[icv0] -= FrhoE;
-    rhoY_rhs[icv0] -= FrhoY;
-
-    rho_rhs[icv1] += Frho;
-    rhou_rhs[icv1] += Frhou;
-    rhoE_rhs[icv1] += FrhoE;
-    rhoY_rhs[icv1] += FrhoY;
+    rho_rhs[icv1] += FR1[ifa];
+    rhou_rhs[icv1] += FRU1[ifa];
+    rhoE_rhs[icv1] += FRE1[ifa];
+    rhoY_rhs[icv1] += FRY1[ifa];
   }
 }
 
@@ -336,7 +392,8 @@ void GenericSolver::UpdateFluxes(int rk_step) {
     double BRY0 = this->beta_RY[icv0];
     double BRY1 = this->beta_RY[icv1];
 
-    double Frho = 0., Frhou = 0., FrhoE = 0., FrhoY = 0.;
+    double Frho0 = 0., Frhou0 = 0., FrhoE0 = 0., FrhoY0 = 0.;
+    double Frho1 = 0., Frhou1 = 0., FrhoE1 = 0., FrhoY1 = 0.;
 
     this->mixture->CalcNumericalFlux(rho0, rho1,
                                      rhou0, rhou1,
@@ -344,14 +401,21 @@ void GenericSolver::UpdateFluxes(int rk_step) {
                                      rhoY0, rhoY1,
                                      P0, P1,
                                      T0, T1,
-                                     Frho, Frhou,
-                                     FrhoE, FrhoY,
+                                     Frho0, Frhou0,
+                                     FrhoE0, FrhoY0,
+                                     Frho1, Frhou1,
+                                     FrhoE1, FrhoY1,
                                      BR0, BR1,
                                      BRY0, BRY1, FA_MARK[ifa]);
-    this->FR[ifa] = Frho;
-    this->FRU[ifa] = Frhou;
-    this->FRE[ifa] = FrhoE;
-    this->FRY[ifa] = FrhoY;
+    this->FR0[ifa] = Frho0;
+    this->FRU0[ifa] = Frhou0;
+    this->FRE0[ifa] = FrhoE0;
+    this->FRY0[ifa] = FrhoY0;
+
+    this->FR1[ifa] = Frho1;
+    this->FRU1[ifa] = Frhou1;
+    this->FRE1[ifa] = FrhoE1;
+    this->FRY1[ifa] = FrhoY1;
 
     for (int icv : {icv0,icv1}) {
       FR_CV[icv] = RU[icv];

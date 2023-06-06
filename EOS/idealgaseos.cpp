@@ -59,11 +59,15 @@ void IdealGasEOS::CalcNumericalFlux(double R0, double R1,
                                     double RY0, double RY1,
                                     double P0, double P1,
                                     double T0, double T1,
-                                    double &Frho, double &Frhou,
-                                    double &FrhoE, double &FrhoY,
+                                    double& Frho0, double& Frhou0,
+                                    double& FrhoE0, double& FrhoY0,
+                                    double& Frho1, double& Frhou1,
+                                    double& FrhoE1, double& FrhoY1,
                                     double BR0, double BR1,
                                     double BRY0, double BRY1,
                                     double& FA_MARK) {
+  double Frho, Frhou, FrhoE, FrhoY;
+
   if (this->numerical_flux == CENTRAL || this->numerical_flux == PEQ_CENTRAL) {
     double G0, G1;
     G0 = (RE0 - 0.5*RU0*RU0/R0)/P0;
@@ -189,6 +193,11 @@ void IdealGasEOS::CalcNumericalFlux(double R0, double R1,
   } else {
     throw -1;
   }
+
+  Frho0 = Frho; Frho1 = Frho;
+  Frhou0 = Frhou; Frhou1 = Frhou;
+  FrhoE0 = FrhoE; FrhoE1 = FrhoE;
+  FrhoY0 = FrhoY; FrhoY1 = FrhoY;
 }
 
 //-------------------------------------------------------------------------------------

@@ -9,6 +9,7 @@
 // EOS
 #include "EOS/genericeos.h"
 #include "EOS/idealgaseos.h"
+#include "EOS/vanderwaalseos.h"
 
 static GenericEOS* MakeEOS(const toml::table& params) {
   GenericEOS* ret;
@@ -16,6 +17,10 @@ static GenericEOS* MakeEOS(const toml::table& params) {
   std::string eos_type = *params["EOS"]["type"].value<std::string>();
   if (eos_type == "IdealGas") {
     IdealGasEOS* pt = new IdealGasEOS;
+    pt->Initialize(params);
+    ret = pt;
+  } else if (eos_type == "VanDerWaals") {
+    VanDerWaalsEOS* pt = new VanDerWaalsEOS;
     pt->Initialize(params);
     ret = pt;
   } else {

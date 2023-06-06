@@ -24,8 +24,10 @@ public:
                                  double RY0, double RY1,
                                  double P0, double P1,
                                  double T0, double T1,
-                                 double& Frho, double& Frhou,
-                                 double& FrhoE, double& FrhoY,
+                                 double& Frho0, double& Frhou0,
+                                 double& FrhoE0, double& FrhoY0,
+                                 double& Frho1, double& Frhou1,
+                                 double& FrhoE1, double& FrhoY1,
                                  double BR0, double BR1,
                                  double BRY0, double BRY1,
                                  double& FA_MARK) override;

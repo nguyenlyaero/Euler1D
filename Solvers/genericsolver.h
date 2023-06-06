@@ -70,10 +70,15 @@ protected:
   double* beta_RY;
 
   // Fluxes
-  double* FR;
-  double* FRU;
-  double* FRE;
-  double* FRY;
+  double* FR0;
+  double* FRU0;
+  double* FRE0;
+  double* FRY0;
+
+  double* FR1;
+  double* FRU1;
+  double* FRE1;
+  double* FRY1;
 
   double* FA_MARK;
 
